@@ -1,0 +1,1 @@
+import {session} from '@/lib/auth';import {redirect} from 'next/navigation';import Workspace from '@/components/workspace';export default async function Home(){const s=await session();if(!s)redirect('/login');return <Workspace user={s}/>};
