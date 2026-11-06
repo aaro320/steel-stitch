@@ -1,25 +1,3 @@
-</div>
-<div className="panel">
-<h2 className="font-bold text-lg text-amber-700 mb-3">Low Stock Warnings</h2>{table(['Material','Stock','Supplier / Contact'],low.map(m=>[m.name+' — '+m.variant,<span className="pill">{m.current_stock} {m.unit}</span>,suppliers.find(s=>s.id===m.supplier_id)?.name+' / '+(suppliers.find(s=>s.id===m.supplier_id)?.phone||'')]))}
-</div>
-</>}
-{tab==='inventory'&&<div className="panel">
-<div className="flex justify-between mb-4">
-<h2 className="font-bold">Material Inventory</h2>{admin&&<button className="btn" onClick={()=>{F({});
-M('material')}}>+ New Material</button>}
-</div>{table(admin?['Material','Category','Variant','Available','Minimum','Unit Price','Supplier']:['Material','Category','Variant','Available','Minimum'],materials.map(m=>[m.name,m.category,m.variant,<span className={Number(m.current_stock)<=Number(m.low_stock_level)?'pill':''}>{m.current_stock} {m.unit}</span>,m.low_stock_level,...(admin?[money(m.unit_price),suppliers.find(s=>s.id===m.supplier_id)?.name]:[])]))}
-</div>}
-{tab==='stock'&&<div className="grid md:grid-cols-2 gap-5">
-<div className="panel">
-<h2 className="font-bold text-xl mb-4">Quick Stock-In</h2>
-<button className="btn w-full py-5" onClick={()=>{F({kind:'in'});
-M('stock')}}>+ Receive Materials</button>
-</div>
-<div className="panel">
-<h2 className="font-bold text-xl mb-4">Quick Stock-Out</h2>
-<button className="btn w-full py-5" onClick={()=>{F({kind:'out'});
-M('stock')}}>− Record Usage / Wastage</button>
-</div>{admin&&<div className="panel">
 <h2 className="font-bold mb-4">Stock Adjustment</h2>
 <button className="btn" onClick={()=>{F({kind:'adjust'});
 M('stock')}}>Create Adjustment</button>
@@ -77,6 +55,17 @@ M('remove_user')}}>Remove</button>}{u.role==='owner'&&<span>Protected</span>}
 {modal==='user'&&<>{field('Full Name','name')}{field('Nickname','nickname')}{field('Role','role','text',['admin','clerk'])}{field('Initial PIN','pin','password')}{field('Security Question','question')}{field('Security Answer','answer')}</>}
 {modal==='pin'&&<>{field('Current PIN','oldPin','password')}{field('New PIN','newPin','password')}</>}
 {modal==='reset_clerk'&&field('New Clerk PIN','pin','password')}
+{modal === 'security_question' && (
+  <div className="md:col-span-2 space-y-3">
+    <p className="text-sm text-slate-600">
+      Verify your current PIN to update your security question and recovery answer.
+    </p>
+    {field('Current PIN', 'currentPin', 'password')}
+    {field('New Security Question', 'question')}
+    {field('New Security Answer', 'answer', 'password')}
+    {field('Confirm Security Answer', 'confirmAnswer', 'password')}
+  </div>
+)}
  {modal==='remove_user'&&<div className="md:col-span-2">
 <p className="mb-3 text-red-700">Deactivate {form.nickname}? This account will lose access. Historical records will be retained.</p>{field('Confirm with your Owner PIN','pin','password')}
 </div>}
@@ -119,9 +108,21 @@ else if(modal==='job')send('/api/operations',{action:'job',...form,items,materia
 else if(modal==='user'||modal==='reset_clerk')send('/api/operations',{action:modal,...form});
 else if(modal==='remove_user')send('/api/operations',{action:'remove_user',id:form.id,pin:form.pin});
 else if(modal==='pin')send('/api/auth',{action:'change',...form});
+else if (modal === 'security_question') {
+  if (!form.currentPin || !form.question?.trim() || !form.answer?.trim() || !form.confirmAnswer) {
+    E('Please complete all fields.');
+    return;
+  }
+  if (form.answer !== form.confirmAnswer) {
+    E('Security answers do not match.');
+    return;
+  }
+  send('/api/auth', {
+    action: 'change_security_question',
+    currentPin: form.currentPin,
+    question: form.question.trim(),
+    answer: form.answer.trim(),
+  });
+}
 else send('/api/data',{table:modal==='material'?'materials':modal==='supplier'?'suppliers':'services',values:form})}}>{busy?'Saving...':'Save / Confirm'}</button>
 </div>
-</div>
-</div>}
-</main>
-</div>}
