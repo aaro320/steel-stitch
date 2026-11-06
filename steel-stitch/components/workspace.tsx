@@ -1,27 +1,127 @@
-"use client";import {useEffect,useState} from 'react';import {useRouter} from 'next/navigation';import {LayoutDashboard,Boxes,ArrowLeftRight,ClipboardList,Package,Truck,ScrollText,ChartColumn,Users,LogOut,Plus} from 'lucide-react';
-const money=(n:any)=>new Intl.NumberFormat('en-PH',{style:'currency',currency:'PHP'}).format(Number(n||0));const names=['Overview Dashboard','Raw Materials Inventory','Stock In / Out','Job Orders','Service & Product Catalog','Suppliers','Audit Trail','Reports','User Profiles'];const icons=[LayoutDashboard,Boxes,ArrowLeftRight,ClipboardList,Package,Truck,ScrollText,ChartColumn,Users];const tabs=['overview','inventory','stock','jobs','catalog','suppliers','audit','reports','users'];
-export default function Workspace({user}:{user:any}){const router=useRouter(),admin=user.role!=='clerk';const [tab,T]=useState(admin?'overview':'inventory'),[rows,R]=useState<any[]>([]),[materials,Mat]=useState<any[]>([]),[suppliers,Sup]=useState<any[]>([]),[services,Serv]=useState<any[]>([]),[jobs,Jobs]=useState<any[]>([]),[audit,Audit]=useState<any[]>([]),[users,Users]=useState<any[]>([]),[modal,M]=useState(''),[form,F]=useState<any>({}),[error,E]=useState(''),[busy,B]=useState(false),[items,I]=useState<any[]>([]),[alloc,A]=useState<any[]>([]),[period,Period]=useState('monthly');
-async function load(){async function get(t:string){const r=await fetch('/api/data?table='+t);return (await r.json()).data||[]}const m=await get('materials');Mat(m);if(admin){const [s,sv,j,a,u]=await Promise.all(['suppliers','services','job_orders','stock_audit','profiles_public'].map(get));Sup(s);Serv(sv);Jobs(j);Audit(a);Users(u)}}useEffect(()=>{load()},[]);
-async function send(path:string,payload:any){B(true);E('');try{const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const j=await r.json();if(!r.ok)throw Error(j.error||'Operation failed');M('');F({});await load()}catch(e:any){E(e.message)}finally{B(false)}};
-const field=(label:string,key:string,type='text',opts?:any[])=> <div className="field" key={key}><label>{label}</label>{opts?<select value={form[key]||''} onChange={e=>F({...form,[key]:e.target.value})}><option value="">Select...</option>{opts.map(o=><option key={o.id||o} value={o.id||o}>{o.name||o}</option>)}</select>:<input type={type} value={form[key]||''} onChange={e=>F({...form,[key]:e.target.value})}/>}</div>;
-const table=(headers:string[],data:any[][])=><div className="overflow-x-auto"><table className="table"><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{data.map((row,i)=><tr key={i}>{row.map((c,j)=><td key={j}>{c}</td>)}</tr>)}</tbody></table></div>;
-const low=materials.filter(m=>Number(m.current_stock)<=Number(m.low_stock_level));const recent=jobs.filter(j=>{const d=new Date(j.completed_at||0),n=new Date();return j.status==='Completed'&&(period==='daily'?d.toDateString()===n.toDateString():period==='weekly'?n.getTime()-d.getTime()<604800000:d.getMonth()===n.getMonth()&&d.getFullYear()===n.getFullYear())});
-function csv(){const data=[['Customer','Status','Total PHP','Completed'],...recent.map(j=>[j.customer,j.status,j.total,j.completed_at])];const csv=data.map(r=>r.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));const a=document.createElement('a');a.href=url;a.download='job-report.csv';a.click();URL.revokeObjectURL(url)}
-return <div className="min-h-screen md:flex"><aside className="bg-slate-950 text-white md:w-64 md:min-h-screen p-5 shrink-0"><div className="text-2xl font-black mb-1">STEEL <span className="text-amber-500">&</span> STITCH</div><p className="text-xs text-slate-400 mb-8">WORKSHOP MANAGEMENT</p><nav className="flex md:flex-col overflow-x-auto gap-1">{tabs.map((t,i)=>{if(!admin&&!['inventory','stock'].includes(t))return null;const Icon=icons[i];return <button key={t} onClick={()=>T(t)} className={'flex items-center gap-3 rounded-lg px-3 py-3 text-sm whitespace-nowrap text-left '+(tab===t?'bg-amber-500 text-slate-950 font-bold':'hover:bg-slate-800 text-slate-300')}><Icon size={17}/>{names[i]}</button>})}</nav><div className="mt-8 border-t border-slate-700 pt-5 text-sm"><p className="font-semibold">{user.name}</p><p className="text-slate-400 uppercase text-xs mb-3">{user.role}</p><button onClick={()=>{M('pin');F({})}} className="text-slate-300 block mb-3">Change PIN</button><button className="flex gap-2 text-red-300" onClick={async()=>{await send('/api/auth',{action:'logout'});router.push('/login')}}><LogOut size={16}/> Sign Out</button></div></aside><main className="p-6 md:p-9 flex-1 min-w-0"><div className="flex justify-between items-center mb-7"><div><p className="text-slate-500 text-sm">Steel & Stitch / {user.role}</p><h1 className="text-3xl font-bold">{names[tabs.indexOf(tab)]}</h1></div><span className="bg-white border px-3 py-2 rounded-lg text-sm">{new Date().toLocaleDateString('en-PH')}</span></div>
-{tab==='overview'&&<><div className="grid md:grid-cols-4 gap-4 mb-6">{[['Inventory Value',money(materials.reduce((a,m)=>a+Number(m.current_stock)*Number(m.unit_price),0))],['Low Stock Alerts',low.length],['Active Job Orders',jobs.filter(j=>j.status!=='Completed').length],['Monthly Revenue',money(jobs.filter(j=>j.status==='Completed'&&new Date(j.completed_at).getMonth()===new Date().getMonth()).reduce((a,j)=>a+Number(j.total),0))]].map(([a,b])=><div className="panel" key={a}><p className="text-sm text-slate-500">{a}</p><p className="text-2xl font-bold mt-2">{b}</p></div>)}</div><div className="panel"><h2 className="font-bold text-lg text-amber-700 mb-3">Low Stock Warnings</h2>{table(['Material','Stock','Supplier / Contact'],low.map(m=>[m.name+' — '+m.variant,<span className="pill">{m.current_stock} {m.unit}</span>,suppliers.find(s=>s.id===m.supplier_id)?.name+' / '+(suppliers.find(s=>s.id===m.supplier_id)?.phone||'')]))}</div></>}
-{tab==='inventory'&&<div className="panel"><div className="flex justify-between mb-4"><h2 className="font-bold">Material Inventory</h2>{admin&&<button className="btn" onClick={()=>{F({});M('material')}}>+ New Material</button>}</div>{table(admin?['Material','Category','Variant','Available','Minimum','Unit Price','Supplier']:['Material','Category','Variant','Available','Minimum'],materials.map(m=>[m.name,m.category,m.variant,<span className={Number(m.current_stock)<=Number(m.low_stock_level)?'pill':''}>{m.current_stock} {m.unit}</span>,m.low_stock_level,...(admin?[money(m.unit_price),suppliers.find(s=>s.id===m.supplier_id)?.name]:[])]))}</div>}
-{tab==='stock'&&<div className="grid md:grid-cols-2 gap-5"><div className="panel"><h2 className="font-bold text-xl mb-4">Quick Stock-In</h2><button className="btn w-full py-5" onClick={()=>{F({kind:'in'});M('stock')}}>+ Receive Materials</button></div><div className="panel"><h2 className="font-bold text-xl mb-4">Quick Stock-Out</h2><button className="btn w-full py-5" onClick={()=>{F({kind:'out'});M('stock')}}>− Record Usage / Wastage</button></div>{admin&&<div className="panel"><h2 className="font-bold mb-4">Stock Adjustment</h2><button className="btn" onClick={()=>{F({kind:'adjust'});M('stock')}}>Create Adjustment</button></div>}</div>}
-{tab==='catalog'&&<div className="panel"><button className="btn mb-4" onClick={()=>{F({});M('service')}}>+ Add Service</button>{table(['Service','Type','Price'],services.map(s=>[s.name,s.variant,money(s.price)]))}</div>}
-{tab==='suppliers'&&<div className="panel"><button className="btn mb-4" onClick={()=>{F({});M('supplier')}}>+ Add Supplier</button>{table(['Supplier','Phone','Linked Materials'],suppliers.map(s=>[s.name,s.phone,materials.filter(m=>m.supplier_id===s.id).map(m=>m.name).join(', ')]))}</div>}
-{tab==='jobs'&&<div className="panel"><button className="btn mb-4" onClick={()=>{F({});I([]);A([]);M('job')}}>+ Create Job Order</button>{table(['Customer','Status','Total','Created','Action'],jobs.map(j=>[j.customer,<span className="pill">{j.status}</span>,money(j.total),new Date(j.created_at).toLocaleDateString(),<select value={j.status} onChange={e=>send('/api/operations',{action:'complete',id:j.id,status:e.target.value})}>{['Pending','In Progress','Ready for Pickup','Completed'].map(x=><option key={x}>{x}</option>)}</select>]))}</div>}
-{tab==='audit'&&<div className="panel">{table(['Date','Material','Action','Change','By','Reason'],audit.map(a=>[new Date(a.created_at).toLocaleString(),materials.find(m=>m.id===a.material_id)?.name,a.kind,a.delta,a.actor_name+' ('+a.actor_role+')',a.note]))}</div>}
-{tab==='reports'&&<div className="panel"><div className="flex gap-3 mb-5"><select className="max-w-48" value={period} onChange={e=>Period(e.target.value)}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select><button className="btn" onClick={csv}>Export CSV</button></div><div className="text-2xl font-bold mb-5">Revenue: {money(recent.reduce((a,j)=>a+Number(j.total),0))}</div>{table(['Customer','Completed','Revenue'],recent.map(j=>[j.customer,new Date(j.completed_at).toLocaleDateString(),money(j.total)]))}<h3 className="font-bold mt-7">Most Used Materials (All Time)</h3>{table(['Material','Used'],materials.map(m=>[m.name,audit.filter(a=>a.material_id===m.id&&a.delta<0).reduce((a,b)=>a-Math.min(0,Number(b.delta)),0)]).sort((a:any,b:any)=>b[1]-a[1]))}</div>}
-{tab==='users'&&<div className="panel"><button className="btn mb-4" onClick={()=>{F({role:'clerk'});M('user')}}>+ Create Profile</button>{table(['Name','Nickname','Role','Actions'],users.map(u=>[u.full_name,u.nickname,u.role,u.role==='clerk'?<button className="text-blue-700" onClick={()=>{F({id:u.id});M('reset_clerk')}}>Reset PIN</button>:'—']))}</div>}
-{modal&&<div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"><div className="panel w-full max-w-xl max-h-[90vh] overflow-y-auto"><div className="flex justify-between mb-5"><h2 className="font-bold text-xl capitalize">{modal.replaceAll('_',' ')}</h2><button onClick={()=>M('')}>✕</button></div><div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+</div>
+<div className="panel">
+<h2 className="font-bold text-lg text-amber-700 mb-3">Low Stock Warnings</h2>{table(['Material','Stock','Supplier / Contact'],low.map(m=>[m.name+' — '+m.variant,<span className="pill">{m.current_stock} {m.unit}</span>,suppliers.find(s=>s.id===m.supplier_id)?.name+' / '+(suppliers.find(s=>s.id===m.supplier_id)?.phone||'')]))}
+</div>
+</>}
+{tab==='inventory'&&<div className="panel">
+<div className="flex justify-between mb-4">
+<h2 className="font-bold">Material Inventory</h2>{admin&&<button className="btn" onClick={()=>{F({});
+M('material')}}>+ New Material</button>}
+</div>{table(admin?['Material','Category','Variant','Available','Minimum','Unit Price','Supplier']:['Material','Category','Variant','Available','Minimum'],materials.map(m=>[m.name,m.category,m.variant,<span className={Number(m.current_stock)<=Number(m.low_stock_level)?'pill':''}>{m.current_stock} {m.unit}</span>,m.low_stock_level,...(admin?[money(m.unit_price),suppliers.find(s=>s.id===m.supplier_id)?.name]:[])]))}
+</div>}
+{tab==='stock'&&<div className="grid md:grid-cols-2 gap-5">
+<div className="panel">
+<h2 className="font-bold text-xl mb-4">Quick Stock-In</h2>
+<button className="btn w-full py-5" onClick={()=>{F({kind:'in'});
+M('stock')}}>+ Receive Materials</button>
+</div>
+<div className="panel">
+<h2 className="font-bold text-xl mb-4">Quick Stock-Out</h2>
+<button className="btn w-full py-5" onClick={()=>{F({kind:'out'});
+M('stock')}}>− Record Usage / Wastage</button>
+</div>{admin&&<div className="panel">
+<h2 className="font-bold mb-4">Stock Adjustment</h2>
+<button className="btn" onClick={()=>{F({kind:'adjust'});
+M('stock')}}>Create Adjustment</button>
+</div>}
+</div>}
+{tab==='catalog'&&<div className="panel">
+<button className="btn mb-4" onClick={()=>{F({});
+M('service')}}>+ Add Service</button>{table(['Service','Type','Price'],services.map(s=>[s.name,s.variant,money(s.price)]))}
+</div>}
+{tab==='suppliers'&&<div className="panel">
+<button className="btn mb-4" onClick={()=>{F({});
+M('supplier')}}>+ Add Supplier</button>{table(['Supplier','Phone','Linked Materials'],suppliers.map(s=>[s.name,s.phone,materials.filter(m=>m.supplier_id===s.id).map(m=>m.name).join(', ')]))}
+</div>}
+{tab==='jobs'&&<div className="panel">
+<button className="btn mb-4" onClick={()=>{F({});
+I([]);
+A([]);
+M('job')}}>+ Create Job Order</button>{table(['Customer','Status','Total','Created','Action'],jobs.map(j=>[j.customer,<span className="pill">{j.status}</span>,money(j.total),new Date(j.created_at).toLocaleDateString(),<select value={j.status} onChange={e=>send('/api/operations',{action:'complete',id:j.id,status:e.target.value})}>{['Pending','In Progress','Ready for Pickup','Completed'].map(x=>
+<option key={x}>{x}</option>)}</select>]))}
+</div>}
+{tab==='audit'&&<div className="panel">{table(['Date','Material','Action','Change','By','Reason'],audit.map(a=>[new Date(a.created_at).toLocaleString(),materials.find(m=>m.id===a.material_id)?.name,a.kind,a.delta,a.actor_name+' ('+a.actor_role+')',a.note]))}
+</div>}
+{tab==='reports'&&<div className="panel">
+<div className="flex gap-3 mb-5">
+<select className="max-w-48" value={period} onChange={e=>Period(e.target.value)}>
+<option value="daily">Daily</option>
+<option value="weekly">Weekly</option>
+<option value="monthly">Monthly</option>
+</select>
+<button className="btn" onClick={csv}>Export CSV</button>
+</div>
+<div className="text-2xl font-bold mb-5">Revenue: {money(recent.reduce((a,j)=>a+Number(j.total),0))}
+</div>{table(['Customer','Completed','Revenue'],recent.map(j=>[j.customer,new Date(j.completed_at).toLocaleDateString(),money(j.total)]))}<h3 className="font-bold mt-7">Most Used Materials (All Time)</h3>{table(['Material','Used'],materials.map(m=>[m.name,audit.filter(a=>a.material_id===m.id&&a.delta<0).reduce((a,b)=>a-Math.min(0,Number(b.delta)),0)]).sort((a:any,b:any)=>b[1]-a[1]))}
+</div>}
+{tab==='users'&&<div className="panel">
+<button className="btn mb-4" onClick={()=>{F({role:'clerk'});
+M('user')}}>+ Create Profile</button>{table(['Name','Nickname','Role','Actions'],users.map(u=>[u.full_name,u.nickname,u.role,<div className="flex items-center gap-4">{u.role==='clerk'&&<button className="text-blue-700" onClick={()=>{E('');
+F({id:u.id});
+M('reset_clerk')}}>Reset PIN</button>}{user.role==='owner'&&u.role!=='owner'&&<button className="text-red-700 font-semibold" onClick={()=>{E('');
+F({id:u.id,nickname:u.nickname,pin:''});
+M('remove_user')}}>Remove</button>}{u.role==='owner'&&<span>Protected</span>}
+</div>]))}
+</div>}
+{modal&&<div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+<div className="panel w-full max-w-xl max-h-[90vh] overflow-y-auto">
+<div className="flex justify-between mb-5">
+<h2 className="font-bold text-xl capitalize">{modal.replaceAll('_',' ')}</h2>
+<button onClick={()=>M('')}>✕</button>
+</div>
+<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
 {modal==='material'&&<>{field('Material Name','name')}{field('Category','category','text',['Leather','Charol','Plywood','Wood/Lumber','Foam','Aluminum','Hardware/Consumables'])}{field('Type / Color / Thickness','variant')}{field('Unit','unit','text',['Meters','Pcs','Roll','Box'])}{field('Initial Stock','current_stock','number')}{field('Low Stock Level','low_stock_level','number')}{field('Unit Price PHP','unit_price','number')}{field('Supplier','supplier_id','text',suppliers)}</>}
-{modal==='supplier'&&<>{field('Supplier Name','name')}{field('Phone','phone')}</>}{modal==='service'&&<>{field('Service Name','name')}{field('Type','variant')}{field('Price PHP','price','number')}</>}
+{modal==='supplier'&&<>{field('Supplier Name','name')}{field('Phone','phone')}</>}
+{modal==='service'&&<>{field('Service Name','name')}{field('Type','variant')}{field('Price PHP','price','number')}</>}
 {modal==='stock'&&<>{field('Material','material','text',materials.map(m=>({...m,name:m.name+' — '+m.variant+' ('+m.current_stock+' '+m.unit+')'})))}{field('Quantity','quantity','number')}{field('Reason / Notes','note')}</>}
 {modal==='user'&&<>{field('Full Name','name')}{field('Nickname','nickname')}{field('Role','role','text',['admin','clerk'])}{field('Initial PIN','pin','password')}{field('Security Question','question')}{field('Security Answer','answer')}</>}
-{modal==='pin'&&<>{field('Current PIN','oldPin','password')}{field('New PIN','newPin','password')}</>}{modal==='reset_clerk'&&field('New Clerk PIN','pin','password')}
-{modal==='job'&&<div className="md:col-span-2 space-y-3">{field('Customer Name','customer')}{field('Contact / Plate','contact')}{field('Details','details')}<div className="font-semibold">Service / Custom Line Items</div><div className="flex gap-2"><select id="service-pick"><option value="">Select service</option>{services.map(s=><option key={s.id} value={s.id}>{s.name} — {money(s.price)}</option>)}</select><button className="btn" onClick={()=>{const id=(document.getElementById('service-pick') as HTMLSelectElement).value;const s=services.find(x=>x.id===id);if(s)I([...items,{name:s.name,price:Number(s.price)}])}}>Add</button></div><div className="flex gap-2"><input id="custom-name" placeholder="Custom item name"/><input id="custom-price" type="number" placeholder="Price"/><button className="btn" onClick={()=>{const n=document.getElementById('custom-name') as HTMLInputElement,p=document.getElementById('custom-price') as HTMLInputElement;if(n.value&&Number(p.value)>=0&&p.value)I([...items,{name:n.value,price:Number(p.value)}]);n.value='';p.value=''}}>Add</button></div>{items.map((it,i)=><p key={i}>{it.name} — {money(it.price)} <button className="text-red-600" onClick={()=>I(items.filter((_,k)=>k!==i))}>Remove</button></p>)}<b>Total: {money(items.reduce((a,x)=>a+Number(x.price),0))}</b><div className="font-semibold mt-4">Material Allocations</div><div className="flex gap-2"><select id="allocation-material"><option value="">Select material</option>{materials.map(m=><option value={m.id} key={m.id}>{m.name} — {m.variant} ({m.current_stock} available)</option>)}</select><input id="allocation-qty" type="number" placeholder="Qty"/><button className="btn" onClick={()=>{const id=(document.getElementById('allocation-material') as HTMLSelectElement).value,q=Number((document.getElementById('allocation-qty') as HTMLInputElement).value);if(id&&q>0)A([...alloc,{id,quantity:q}])}}>Add</button></div>{alloc.map((x,i)=><p key={i}>{materials.find(m=>m.id===x.id)?.name} × {x.quantity} <button className="text-red-600" onClick={()=>A(alloc.filter((_,k)=>k!==i))}>Remove</button></p>)}<button className="text-blue-700" onClick={()=>{M('material');E('Create the material, then return to the job form.')}}>+ New Material</button></div>}
-</div>{error&&<p className="text-red-600 text-sm mt-4">{error}</p>}<div className="flex justify-end gap-3 mt-6"><button onClick={()=>M('')} className="px-4">Cancel</button><button disabled={busy} className="btn" onClick={()=>{if(modal==='stock')send('/api/operations',{action:form.kind==='adjust'?'adjust':'stock',...form});else if(modal==='job')send('/api/operations',{action:'job',...form,items,materials:alloc});else if(modal==='user'||modal==='reset_clerk')send('/api/operations',{action:modal,...form});else if(modal==='pin')send('/api/auth',{action:'change',...form});else send('/api/data',{table:modal==='material'?'materials':modal==='supplier'?'suppliers':'services',values:form})}}>{busy?'Saving...':'Save / Confirm'}</button></div></div></div>}</main></div>}
+{modal==='pin'&&<>{field('Current PIN','oldPin','password')}{field('New PIN','newPin','password')}</>}
+{modal==='reset_clerk'&&field('New Clerk PIN','pin','password')}
+ {modal==='remove_user'&&<div className="md:col-span-2">
+<p className="mb-3 text-red-700">Deactivate {form.nickname}? This account will lose access. Historical records will be retained.</p>{field('Confirm with your Owner PIN','pin','password')}
+</div>}
+{modal==='job'&&<div className="md:col-span-2 space-y-3">{field('Customer Name','customer')}{field('Contact / Plate','contact')}{field('Details','details')}<div className="font-semibold">Service / Custom Line Items</div>
+<div className="flex gap-2">
+<select id="service-pick">
+<option value="">Select service</option>{services.map(s=>
+<option key={s.id} value={s.id}>{s.name} — {money(s.price)}</option>)}</select>
+<button className="btn" onClick={()=>{const id=(document.getElementById('service-pick') as HTMLSelectElement).value;
+const s=services.find(x=>x.id===id);
+if(s)I([...items,{name:s.name,price:Number(s.price)}])}}>Add</button>
+</div>
+<div className="flex gap-2">
+<input id="custom-name" placeholder="Custom item name"/>
+<input id="custom-price" type="number" placeholder="Price"/>
+<button className="btn" onClick={()=>{const n=document.getElementById('custom-name') as HTMLInputElement,p=document.getElementById('custom-price') as HTMLInputElement;
+if(n.value&&Number(p.value)>=0&&p.value)I([...items,{name:n.value,price:Number(p.value)}]);
+n.value='';
+p.value=''}}>Add</button>
+</div>{items.map((it,i)=>
+<p key={i}>{it.name} — {money(it.price)} <button className="text-red-600" onClick={()=>I(items.filter((_,k)=>k!==i))}>Remove</button>
+</p>)}<b>Total: {money(items.reduce((a,x)=>a+Number(x.price),0))}</b>
+<div className="font-semibold mt-4">Material Allocations</div>
+<div className="flex gap-2">
+<select id="allocation-material">
+<option value="">Select material</option>{materials.map(m=>
+<option value={m.id} key={m.id}>{m.name} — {m.variant} ({m.current_stock} available)</option>)}</select>
+<input id="allocation-qty" type="number" placeholder="Qty"/>
+<button className="btn" onClick={()=>{const id=(document.getElementById('allocation-material') as HTMLSelectElement).value,q=Number((document.getElementById('allocation-qty') as HTMLInputElement).value);
+if(id&&q>0)A([...alloc,{id,quantity:q}])}}>Add</button>
+</div>{alloc.map((x,i)=>
+<p key={i}>{materials.find(m=>m.id===x.id)?.name} × {x.quantity} <button className="text-red-600" onClick={()=>A(alloc.filter((_,k)=>k!==i))}>Remove</button>
+</p>)}<button className="text-blue-700" onClick={()=>{M('material');
+E('Create the material, then return to the job form.')}}>+ New Material</button>
+</div>}
+</div>{error&&<p className="text-red-600 text-sm mt-4">{error}</p>}<div className="flex justify-end gap-3 mt-6">
+<button onClick={()=>M('')} className="px-4">Cancel</button>
+<button disabled={busy} className="btn" onClick={()=>{if(modal==='stock')send('/api/operations',{action:form.kind==='adjust'?'adjust':'stock',...form});
+else if(modal==='job')send('/api/operations',{action:'job',...form,items,materials:alloc});
+else if(modal==='user'||modal==='reset_clerk')send('/api/operations',{action:modal,...form});
+else if(modal==='remove_user')send('/api/operations',{action:'remove_user',id:form.id,pin:form.pin});
+else if(modal==='pin')send('/api/auth',{action:'change',...form});
+else send('/api/data',{table:modal==='material'?'materials':modal==='supplier'?'suppliers':'services',values:form})}}>{busy?'Saving...':'Save / Confirm'}</button>
+</div>
+</div>
+</div>}
+</main>
+</div>}
